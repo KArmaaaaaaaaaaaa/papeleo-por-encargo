@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Preparo las facturas de autonomos a partir de una foto de la libreta. 35 euros al mes, sin alta.">
+<meta property="og:title" content="Papeleo por encargo">
+<meta property="og:description" content="Tu conduces. El papeleo lo llevo yo.">
+<title>Papeleo por encargo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;900&display=swap">
+<style>
+  /* Señalética de carretera española. Una sola familia, como una señal real.
+     Overpass deriva de Highway Gothic; es la letra, no una aproximación.
+
+     El movimiento toma su disciplina de las tiendas de Apple —barra fina
+     pegajosa, carrusel con anclaje, bloques que suben al entrar— pero no su
+     estética: aquí los paneles se acercan como señales en la carretera. */
+  :root {
+    --cielo:        #EDF1F5;
+    --cielo-hondo:  #DCE4EC;
+    --panel:        #0A3D91;
+    --panel-hondo:  #07306F;
+    --salida:       #00693E;
+    --aviso:        #F2B705;
+    --tinta:        #101418;
+    --tinta-media:  #40484F;
+    --orla:         #FFFFFF;
+    --asfalto:      #1B1F24;
+    --velo:         rgba(237, 241, 245, 0.82);
+
+    --medida: 64rem;
+    --barra: 3.5rem;
+    /* La curva de Apple: sale rápido y aterriza sin rebote. */
+    --curva: cubic-bezier(0.28, 0.11, 0.32, 1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cielo:       #14181D;
+      --cielo-hondo: #1C222A;
+      --tinta:       #F2F5F8;
+      --tinta-media: #AEB8C2;
+      --panel:       #0E4AAE;
+      --panel-hondo: #0A3D91;
+      --velo:        rgba(20, 24, 29, 0.82);
+    }
+  }
+  :root[data-theme="dark"] {
+    --cielo:       #14181D;
+    --cielo-hondo: #1C222A;
+    --tinta:       #F2F5F8;
+    --tinta-media: #AEB8C2;
+    --panel:       #0E4AAE;
+    --panel-hondo: #0A3D91;
+    --velo:        rgba(20, 24, 29, 0.82);
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-color: var(--panel) var(--cielo-hondo);
+    scrollbar-width: thin;
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    margin: 0;
+    background: var(--cielo);
+    color: var(--tinta);
+    font-family: Overpass, "Helvetica Neue", Arial, sans-serif;
+    font-size: 19px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;   /* red de seguridad; la causa se arregla abajo con min-width */
+  }
+
+  ::selection { background: var(--panel); color: #fff; }
+  :focus-visible { outline: 4px solid var(--aviso); outline-offset: 3px; border-radius: 2px; }
+
+  img, svg { max-width: 100%; }
+
+  .via {
+    max-width: var(--medida);
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 4vw, 2rem);
+  }
+
+  h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+  p { overflow-wrap: break-word; }
+
+  /* ---------- Barra de orientación (fina y pegajosa) ---------- */
+  .orientacion {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--velo);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
+    border-bottom: 1px solid color-mix(in srgb, var(--tinta) 12%, transparent);
+  }
+  .orientacion nav {
+    max-width: var(--medida);
+    margin: 0 auto;
+    padding: 0 clamp(0.5rem, 3vw, 2rem);
+    display: flex;
+    align-items: center;
+    gap: clamp(0.15rem, 1vw, 1.25rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-height: var(--barra);
+  }
+  .orientacion nav::-webkit-scrollbar { display: none; }
+  .marca-via {
+    font-weight: 900;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    margin-right: auto;
+    padding: 0.5rem 0.6rem;
+    color: var(--panel);
+    text-decoration: none;
+  }
+  .orientacion a.destino {
+    color: var(--tinta);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    padding: 0.85rem 0.7rem;      /* área de toque cómoda */
+    border-radius: 8px;
+    transition: background 200ms var(--curva), color 200ms var(--curva);
+  }
+  .orientacion a.destino:hover { background: var(--panel); color: #fff; }
+
+  section, header { scroll-margin-top: calc(var(--barra) + 0.75rem); }
+
+  /* ---------- Panel: la unidad del mundo ---------- */
+  .panel {
+    background: var(--panel);
+    color: #fff;
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 4px var(--orla), 0 14px 34px -18px rgba(7, 22, 51, 0.75);
+    padding: clamp(1.6rem, 4vw, 2.6rem);
+    position: relative;
+    min-width: 0;
+  }
+  .panel--verde { background: var(--salida); }
+
+  .km {
+    position: absolute;
+    right: clamp(1.6rem, 4vw, 2.6rem);
+    bottom: clamp(1.1rem, 3vw, 1.7rem);
+    font-weight: 700;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
+  }
+
+  /* ---------- Preaviso ---------- */
+  header { padding: clamp(1.5rem, 5vw, 3rem) 0 clamp(1.5rem, 4vw, 2.5rem); }
+
+  .preaviso {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: clamp(1.25rem, 4vw, 3rem);
+    align-items: center;
+  }
+  .preaviso h1 { font-size: clamp(2rem, 6.2vw, 4.1rem); font-weight: 900; line-height: 1.03; }
+  .preaviso .bajada {
+    margin: 1.1rem 0 0;
+    font-size: clamp(1.02rem, 2.4vw, 1.35rem);
+    max-width: 26ch;
+    color: #E3ECF8;
+  }
+  .flecha { display: block; width: clamp(48px, 9vw, 92px); height: auto; }
+  .flecha path { fill: #fff; }
+
+  /* ---------- Salida (acción) ---------- */
+  .salida {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: var(--salida);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: clamp(1.02rem, 2.2vw, 1.25rem);
+    padding: 1.05rem 1.5rem;
+    min-height: 56px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 3px var(--orla), 0 10px 26px -14px rgba(0, 40, 24, 0.9);
+    transition: transform 260ms var(--curva), box-shadow 260ms var(--curva);
+  }
+  .salida:hover, .salida:focus-visible {
+    transform: scale(1.03);
+    box-shadow: inset 0 0 0 5px var(--orla), 0 16px 30px -14px rgba(0, 40, 24, 0.95);
+  }
+  .salida svg { width: 26px; height: 26px; flex: none; }
+  .salida svg path { fill: #fff; }
+
+  /* ---------- Hitos: carrusel con anclaje ---------- */
+  /* padding-block, no `padding: X 0`: la forma corta anulaba el padding
+     lateral que hereda de .via y desalineaba este bloque del resto. */
+  .hitos-zona { padding-block: clamp(1.5rem, 4vw, 2.5rem); }
+  .hitos-cabecera {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+  }
+  .hitos-cabecera h2 { font-size: clamp(1.4rem, 3.6vw, 2rem); font-weight: 900; }
+  .mandos { display: flex; gap: 0.5rem; }
+  .mando {
+    width: 44px; height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--cielo-hondo);
+    color: var(--tinta);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background 200ms var(--curva), transform 200ms var(--curva);
+  }
+  .mando:hover { background: var(--panel); color: #fff; }
+  .mando:active { transform: scale(0.94); }
+  .mando svg { width: 18px; height: 18px; }
+  .mando svg path { fill: currentColor; }
+
+  .hitos {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(min(78vw, 300px), 1fr);
+    gap: clamp(1rem, 2.5vw, 1.5rem);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: clamp(1rem, 4vw, 2rem);
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+  }
+  .hitos::-webkit-scrollbar { display: none; }
+  @media (min-width: 860px) {
+    .hitos { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); overflow: visible; }
+    .mandos { display: none; }
+  }
+  .hito {
+    scroll-snap-align: start;
+    border-top: 8px solid var(--panel);
+    padding-top: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .hito .marca { font-weight: 900; font-size: 2.4rem; line-height: 1; font-variant-numeric: tabular-nums; color: var(--panel); }
+  .hito h3 { font-size: 1.2rem; font-weight: 700; }
+  .hito p { margin: 0; color: var(--tinta-media); font-size: 1.02rem; }
+
+  /* ---------- Secciones ---------- */
+  section { padding: clamp(3rem, 7vw, 4.5rem) 0 clamp(1rem, 2vw, 1.5rem); }
+  section > h2 { font-size: clamp(1.6rem, 4.2vw, 2.5rem); font-weight: 900; margin-bottom: 1.4rem; }
+  section p { max-width: 62ch; }
+
+  /* ---------- La prueba ---------- */
+  .prueba {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 2.5rem);
+    align-items: center;
+  }
+  .factura {
+    background: #fff;
+    color: var(--asfalto);
+    border-radius: 10px;
+    padding: clamp(1.1rem, 3vw, 1.8rem);
+    box-shadow: 0 20px 44px -26px rgba(16, 20, 24, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .factura .rotulo { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6B747C; }
+  .factura .linea {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #E4E8EC;
+    font-size: clamp(0.9rem, 2.4vw, 1rem);
+  }
+  .factura .linea span:first-child { min-width: 0; }
+  .factura .linea span:last-child { white-space: nowrap; }
+  .factura .linea:last-of-type { border-bottom: none; }
+  .factura .total {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem;
+    border-top: 3px solid var(--asfalto);
+    margin-top: 0.4rem; padding-top: 0.7rem;
+    font-weight: 900;
+    font-size: clamp(1.35rem, 4.4vw, 1.7rem);
+    font-variant-numeric: tabular-nums;
+  }
+  .tapado { background: var(--asfalto); color: transparent; border-radius: 2px; padding: 0 0.5rem; user-select: none; }
+  .pie-prueba { font-size: 0.95rem; color: var(--tinta-media); margin-top: 0.9rem; }
+
+  /* ---------- Aviso ---------- */
+  .aviso {
+    background: var(--aviso);
+    color: var(--asfalto);
+    border-radius: 14px;
+    padding: clamp(1.4rem, 4vw, 2.4rem);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: clamp(1rem, 3vw, 2rem);
+    align-items: start;
+    box-shadow: inset 0 0 0 4px var(--asfalto);
+  }
+  .aviso svg { width: clamp(42px, 7vw, 68px); height: auto; flex: none; }
+  .aviso h2 { font-size: clamp(1.3rem, 3.4vw, 1.9rem); font-weight: 900; margin-bottom: 0.7rem; }
+  .aviso ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
+  .aviso li { font-weight: 600; }
+
+  /* ---------- Precio ---------- */
+  .precio-fila {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: clamp(1rem, 3vw, 1.6rem);
+  }
+  .precio-fila .panel { display: flex; flex-direction: column; gap: 0.6rem; }
+  .precio-fila p { color: #E3ECF8; margin: 0; font-size: 1.02rem; }
+  /* Después de la regla de arriba y con la misma especificidad: si no,
+     `.precio-fila p` gana y las cifras salen en cuerpo pequeño. */
+  .precio-fila p.cifra {
+    font-size: clamp(2.4rem, 7vw, 3.6rem);
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+  }
+  .cifra small { font-size: 1.05rem; font-weight: 600; opacity: 0.88; }
+  .panel--verde p { color: #DCF0E5; }
+
+  /* ---------- Cierre ---------- */
+  .cierre { display: flex; flex-direction: column; align-items: flex-start; gap: 1.4rem; padding-bottom: clamp(3rem, 8vw, 5rem); }
+  .cierre h2 { font-size: clamp(1.8rem, 5vw, 3rem); margin-bottom: 0; }
+
+  footer { border-top: 3px solid var(--panel); padding: 1.6rem 0 3rem; color: var(--tinta-media); font-size: 0.95rem; }
+  footer p { margin: 0 0 0.4rem; max-width: 70ch; }
+
+  /* ---------- Aproximación: los bloques se acercan al entrar ----------
+     El estado en reposo es VISIBLE. La clase la pone el script solo si hay
+     JavaScript y el visitante no ha pedido menos movimiento, así que sin JS
+     la página se lee entera igualmente. */
+  .js-mov .aproxima {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+    transition: opacity 700ms var(--curva), transform 700ms var(--curva);
+    transition-delay: var(--retraso, 0ms);
+  }
+  .js-mov .aproxima.cerca { opacity: 1; transform: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .salida, .mando, .orientacion a.destino { transition: none; }
+    .salida:hover, .salida:focus-visible { transform: none; }
+  }
+
+  @media (max-width: 860px) {
+    .preaviso { grid-template-columns: 1fr; }
+    .prueba { grid-template-columns: 1fr; }
+    .aviso { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="orientacion">
+  <nav aria-label="Secciones">
+    <a class="marca-via" href="#arriba">Papeleo por encargo</a>
+    <a class="destino" href="./como-funciona.html">Ver demo</a>
+      <a class="destino" href="#como-va">Cómo va</a>
+    <a class="destino" href="#la-prueba">La prueba</a>
+    <a class="destino" href="#lo-que-cuesta">Precio</a>
+    <a class="destino" href="#escribeme">Escríbeme</a>
+  </nav>
+</div>
+
+<header class="via" id="arriba">
+  <div class="panel preaviso aproxima">
+    <div>
+      <h1>Tú conduces.<br>El papeleo lo llevo yo.</h1>
+      <p class="bajada">
+        Me mandas una foto de tu libreta. Te devuelvo la factura hecha
+        y lista para enviar.
+      </p>
+    </div>
+    <svg class="flecha" viewBox="0 0 100 120" aria-hidden="true">
+      <path d="M50 118 L8 62 h24 V4 h36 v58 h24 Z"/>
+    </svg>
+    <span class="km">500 m</span>
+  </div>
+</header>
+
+<main>
+  <div class="via hitos-zona" id="como-va">
+    <div class="hitos-cabecera">
+      <h2>Cómo va, mes a mes</h2>
+      <div class="mandos">
+        <button class="mando" type="button" data-ir="-1" aria-label="Ver el paso anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5 7 12l8.5 8.5 2-2L11 12l6.5-6.5z"/></svg>
+        </button>
+        <button class="mando" type="button" data-ir="1" aria-label="Ver el paso siguiente">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 3.5 17 12l-8.5 8.5-2-2L13 12 6.5 5.5z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="hitos">
+      <div class="hito aproxima">
+        <span class="marca">Día 25</span>
+        <h3>Te aviso</h3>
+        <p>Te escribo para recordarte que se acerca el cierre. Sin prisas y con margen.</p>
+      </div>
+      <div class="hito aproxima">
+        <span class="marca">Día 30</span>
+        <h3>Me lo mandas</h3>
+        <p>Una foto de la libreta, una captura de las notas o un audio. Como lo tengas.</p>
+      </div>
+      <div class="hito aproxima">
+        <span class="marca">Día 1</span>
+        <h3>La tienes hecha</h3>
+        <p>Tu factura en PDF, con el IVA y la retención puestos, lista para enviar.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="via" id="la-prueba">
+    <h2 class="aproxima">Esto es una factura de verdad</h2>
+    <div class="prueba">
+      <div class="factura aproxima">
+        <span class="rotulo">Factura de agosto · 21 jornadas</span>
+        <div class="linea"><span>Barcelona · 14 días</span><span>3.010,00 €</span></div>
+        <div class="linea"><span>Rutas externas · 7 días</span><span>1.575,00 €</span></div>
+        <div class="linea"><span>2ª entrega · 2 extras</span><span>60,00 €</span></div>
+        <div class="linea"><span>IVA 21 %</span><span>975,45 €</span></div>
+        <div class="linea"><span>Retención IRPF 1 %</span><span>−46,45 €</span></div>
+        <div class="total"><span>Total</span><span>5.574,00 €</span></div>
+        <div class="linea"><span>Cliente</span><span class="tapado">nombre tapado</span></div>
+      </div>
+      <div class="aproxima">
+        <p>
+          No es un ejemplo inventado. Es la factura de una clienta real, con sus
+          datos tapados. Ella apunta cada día dónde ha ido; el resto lo hago yo.
+        </p>
+        <p class="pie-prueba">
+          Los autónomos españoles dedican 226 horas al año al papeleo, unas
+          cuatro por semana. Casi siempre el domingo.<br>Fuente: ATA, agosto de 2026.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="via">
+    <div class="aviso aproxima">
+      <svg viewBox="0 0 100 88" aria-hidden="true">
+        <path d="M50 4 L96 84 H4 Z" fill="none" stroke="#1B1F24" stroke-width="8" stroke-linejoin="round"/>
+        <path d="M46 30 h8 v28 h-8 Z M46 64 h8 v8 h-8 Z" fill="#1B1F24"/>
+      </svg>
+      <div>
+        <h2>Lo que no hago</h2>
+        <ul>
+          <li>No presento tus impuestos ante Hacienda. Eso lo sigue haciendo tu gestoría.</li>
+          <li>No soy gestor administrativo, que es una profesión colegiada.</li>
+          <li>No te voy a pedir nunca la clave de Hacienda ni la del banco.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="via" id="lo-que-cuesta">
+    <h2 class="aproxima">Lo que cuesta</h2>
+    <div class="precio-fila">
+      <div class="panel aproxima">
+        <p class="cifra">35 €<small> al mes</small></p>
+        <p>Para los tres primeros. Ese precio se te queda mientras sigas conmigo.</p>
+      </div>
+      <div class="panel aproxima">
+        <p class="cifra">0 €<small> de alta</small></p>
+        <p>Si el primer mes no te sirve, lo dejas y no me debes nada.</p>
+      </div>
+      <div class="panel panel--verde aproxima">
+        <p class="cifra">1</p>
+        <p>Una persona al otro lado. Si algo falla, me llamas a mí.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="via cierre" id="escribeme">
+    <h2 class="aproxima">Escríbeme y lo vemos</h2>
+    <p class="aproxima">
+      Cuéntame cómo haces hoy tu factura. Si no te puedo ayudar, te lo digo
+      y no te cobro por escucharte.
+    </p>
+    <a class="salida aproxima" href="https://wa.me/34632990774">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 4h10v3H7v10h10v-7h3v10H4Z"/>
+        <path d="M14 4h6v6h-3V9l-6 6-2-2 6-6h-1Z"/>
+      </svg>
+      Escribir por WhatsApp
+    </a>
+  </section>
+</main>
+
+<footer class="via">
+  <p>Papeleo por encargo · Facturas y papeleo para autónomos · Castellano de España</p>
+  <p>Preparo tus facturas y ordeno tus papeles. No presento impuestos ante la Agencia Tributaria ni ejerzo como gestor administrativo.</p>
+</footer>
+
+<script>
+  (function () {
+    var menosMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var bloques = document.querySelectorAll('.aproxima');
+
+    // Solo se esconde lo que se va a revelar, y solo si el navegador puede
+    // revelarlo. Sin esto, un fallo del script dejaría la página en blanco.
+    if (!menosMovimiento && 'IntersectionObserver' in window) {
+      document.documentElement.classList.add('js-mov');
+
+      var vigia = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (entrada) {
+          if (!entrada.isIntersecting) return;
+          entrada.target.classList.add('cerca');
+          vigia.unobserve(entrada.target);
+        });
+      }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+
+      // Escalonado por grupo: los hermanos entran uno detrás de otro, como
+      // señales sucesivas. Hace falta un Map: usar el elemento padre como
+      // clave de un objeto lo convierte en la cadena "[object HTMLDivElement]",
+      // así que todos los grupos compartían contador y el retraso crecía sin
+      // parar hasta más de un segundo en los últimos bloques.
+      var grupos = new Map();
+      bloques.forEach(function (bloque) {
+        var padre = bloque.parentNode;
+        var n = grupos.get(padre) || 0;
+        bloque.style.setProperty('--retraso', Math.min(n * 90, 270) + 'ms');
+        grupos.set(padre, n + 1);
+        vigia.observe(bloque);
+      });
+
+      // El primer panel no espera al scroll: ya está en pantalla.
+      requestAnimationFrame(function () {
+        document.querySelectorAll('header .aproxima').forEach(function (el) {
+          el.classList.add('cerca');
+        });
+      });
+
+      // Red de seguridad: pase lo que pase (pestaña abierta en segundo plano,
+      // observador que no dispara, script a medias), a los 3 segundos todo se
+      // muestra. Una página en blanco nunca es una opción aceptable.
+      setTimeout(function () {
+        bloques.forEach(function (el) { el.classList.add('cerca'); });
+      }, 3000);
+    }
+
+    // Carrusel de hitos: las flechas mueven de tarjeta en tarjeta.
+    var pista = document.querySelector('.hitos');
+    document.querySelectorAll('.mando').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        if (!pista) return;
+        var tarjeta = pista.querySelector('.hito');
+        var paso = tarjeta ? tarjeta.getBoundingClientRect().width + 16 : 280;
+        pista.scrollBy({
+          left: paso * Number(boton.dataset.ir),
+          behavior: menosMovimiento ? 'auto' : 'smooth'
+        });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

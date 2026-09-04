@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Manda una foto de tu libreta por WhatsApp y recibes la factura hecha.">
+<title>De la foto a la factura</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap">
+<style>
+  /* ── Paleta: papel y tinta, con el verde de la mensajería como único acento.
+        Nada de gris corporativo: esto lo va a mirar alguien de 68 años en un
+        móvil, probablemente con sol de frente. Contraste alto y letra grande. */
+  :root {
+    --papel:#f2f3f5; --carta:#ffffff; --linea:#e0e2e8;
+    --tinta:#141619; --tinta2:#5a6070; --tinta3:#8d93a1;
+    --verde:#1eaa5c; --verde-claro:#dcf6e6; --azul:#0071e3;
+    --curva:cubic-bezier(0.4,0,0.6,1);
+    --ciclo:26s;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --papel:#0d0f12; --carta:#191c21; --linea:#2a2e36;
+      --tinta:#f0f2f5; --tinta2:#a5abb9; --tinta3:#6f7684;
+      --verde:#3ecf8e; --verde-claro:#12301f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --papel:#0d0f12; --carta:#191c21; --linea:#2a2e36;
+    --tinta:#f0f2f5; --tinta2:#a5abb9; --tinta3:#6f7684;
+    --verde:#3ecf8e; --verde-claro:#12301f;
+  }
+
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--papel); color:var(--tinta);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased }
+
+  .hoja { max-width:44rem; margin:0 auto; padding:clamp(1.2rem,4vw,2.5rem) 1rem 3rem;
+    display:flex; flex-direction:column; gap:1.6rem; align-items:center }
+
+  h1 { font-family:"Bebas Neue",Impact,sans-serif; font-size:clamp(2.4rem,8vw,3.8rem);
+    margin:0; line-height:.95; letter-spacing:.02em; text-align:center; text-wrap:balance }
+  .lema { margin:0; text-align:center; color:var(--tinta2); font-size:clamp(1rem,3.4vw,1.2rem);
+    max-width:26ch; line-height:1.5 }
+
+  /* ── el móvil ── */
+  .movil { width:min(100%,21rem); aspect-ratio:9/17.5; background:var(--carta);
+    border:1px solid var(--linea); border-radius:28px; overflow:hidden;
+    box-shadow:0 18px 50px rgba(0,0,0,.14); display:flex; flex-direction:column;
+    position:relative }
+
+  .barra { background:var(--verde); color:#fff; padding:.85rem 1rem;
+    display:flex; align-items:center; gap:.6rem; flex:none }
+  .avatar { width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.28);
+    display:grid; place-items:center; font-size:1rem; flex:none }
+  .barra .quien { font-weight:600; font-size:.95rem; line-height:1.2 }
+  .barra .cuando { font-size:.72rem; opacity:.85 }
+
+  .chat { flex:1; padding:.9rem .8rem; display:flex; flex-direction:column;
+    gap:.55rem; overflow:hidden; background:var(--papel) }
+
+  .globo { max-width:82%; padding:.6rem .75rem; border-radius:14px; font-size:.92rem;
+    line-height:1.4; opacity:0; transform:translateY(14px) scale(.96);
+    animation-duration:var(--ciclo); animation-timing-function:var(--curva);
+    animation-iteration-count:infinite }
+  .mio  { align-self:flex-end; background:var(--verde-claro); color:var(--tinta);
+          border-bottom-right-radius:4px }
+  .suyo { align-self:flex-start; background:var(--carta); border:1px solid var(--linea);
+          border-bottom-left-radius:4px }
+
+  /* UN SOLO RELOJ para todos: mismo ciclo, misma duración, y el momento de
+     cada globo va dentro de sus PORCENTAJES.
+     Con animation-delay no funciona: el retardo solo se aplica a la primera
+     vuelta, así que en la segunda todos entraban a la vez y la secuencia se
+     descuadraba. Es el fallo clásico de las secuencias en bucle. */
+  .p1 { animation-name:p1 }   /* 0,6 s  la foto */
+  .p2 { animation-name:p2 }   /* 2,6 s  recibido */
+  .p3 { animation-name:p3 }   /* 4,4 s  escribiendo… (y se va al llegar el PDF) */
+  .p4 { animation-name:p4 }   /* 7,4 s  la factura */
+  .p5 { animation-name:p5 }   /* 10,4 s enviada */
+
+  @keyframes p1 {
+    0%,1.5%   { opacity:0; transform:translateY(14px) scale(.96) }
+    4%,94%    { opacity:1; transform:none }
+    100%      { opacity:0; transform:translateY(14px) scale(.96) }
+  }
+  @keyframes p2 {
+    0%,9%     { opacity:0; transform:translateY(14px) scale(.96) }
+    12%,94%   { opacity:1; transform:none }
+    100%      { opacity:0; transform:translateY(14px) scale(.96) }
+  }
+  /* Los puntitos, además de desvanecerse, tienen que dejar de ocupar sitio:
+     un elemento a opacity:0 sigue reservando su alto y su hueco de rejilla, y
+     quedaba un vacío raro entre "Recibido" y la factura. */
+  .p3 { overflow:hidden }
+  @keyframes p3 {
+    0%,16%    { opacity:0; max-height:0; padding-block:0; transform:translateY(14px) scale(.96) }
+    19%,26%   { opacity:1; max-height:3rem; padding-block:.6rem; transform:none }
+    /* Se va justo cuando llega la factura: es lo que hace un chat de verdad. */
+    29%,100%  { opacity:0; max-height:0; padding-block:0; transform:translateY(-6px) scale(.96) }
+  }
+  @keyframes p4 {
+    0%,27%    { opacity:0; transform:translateY(14px) scale(.96) }
+    31%,94%   { opacity:1; transform:none }
+    100%      { opacity:0; transform:translateY(14px) scale(.96) }
+  }
+  @keyframes p5 {
+    0%,39%    { opacity:0; transform:translateY(14px) scale(.96) }
+    43%,94%   { opacity:1; transform:none }
+    100%      { opacity:0; transform:translateY(14px) scale(.96) }
+  }
+
+  /* Ancho explícito, no 100%: el globo se dimensiona por su contenido, así que
+     un hijo al 100% del padre se referencia a sí mismo y se colapsa a nada.
+     La foto salía del tamaño de un sello. */
+  .foto { width:13.5rem; max-width:100%; border-radius:9px; overflow:hidden;
+    background:#dfe3ea; aspect-ratio:4/3; display:grid; place-items:center }
+  .pdf { width:14rem; max-width:100% }
+  .foto .papel-parte { width:82%; height:86%; background:#fff; border-radius:3px;
+    box-shadow:0 2px 8px rgba(0,0,0,.14); padding:8px 10px; display:flex;
+    flex-direction:column; gap:4px; transform:rotate(-1.4deg) }
+  .foto .l { height:5px; border-radius:2px; background:#c9cfd9 }
+  .foto .l.corta { width:52% } .foto .l.media { width:74% }
+  .foto .cab { height:8px; width:42%; border-radius:2px; background:var(--tinta); opacity:.75 }
+
+  .hora { font-size:.68rem; color:var(--tinta3); text-align:right; margin-top:.2rem }
+
+  /* ── el PDF que llega ── */
+  .pdf { background:var(--carta); border:1px solid var(--linea); border-radius:10px;
+    padding:.7rem .8rem; display:flex; flex-direction:column; gap:.45rem }
+  .pdf .fila { display:flex; align-items:center; gap:.5rem }
+  .pdf .icono { width:30px; height:36px; border-radius:4px; background:#e8422e;
+    color:#fff; font-size:.55rem; font-weight:700; display:grid; place-items:center;
+    flex:none; letter-spacing:.04em }
+  .pdf .nombre { font-weight:600; font-size:.86rem; line-height:1.2 }
+  .pdf .peso { font-size:.72rem; color:var(--tinta3) }
+  .pdf .total { border-top:1px dashed var(--linea); padding-top:.45rem;
+    display:flex; align-items:baseline; justify-content:space-between }
+  .pdf .total .q { font-size:.74rem; color:var(--tinta2) }
+  .pdf .total .c { font-family:"Bebas Neue",Impact,sans-serif; font-size:1.5rem;
+    letter-spacing:.02em }
+
+  /* ── el sello de "hecho" ── */
+  .sello { display:flex; align-items:center; gap:.45rem; font-size:.8rem;
+    color:var(--verde); font-weight:600 }
+  .tic { width:17px; height:17px; border-radius:50%; background:var(--verde);
+    color:#fff; display:grid; place-items:center; font-size:.62rem; flex:none }
+
+  /* ── escribiendo… ── */
+  .puntos { display:flex; gap:4px; padding:.15rem 0 }
+  .puntos i { width:6px; height:6px; border-radius:50%; background:var(--tinta3);
+    animation:rebote 1.1s ease-in-out infinite }
+  .puntos i:nth-child(2) { animation-delay:.16s }
+  .puntos i:nth-child(3) { animation-delay:.32s }
+  @keyframes rebote { 0%,60%,100% { transform:translateY(0); opacity:.45 }
+                      30% { transform:translateY(-5px); opacity:1 } }
+
+  /* ── los pasos de debajo ── */
+  .pasos { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));
+    gap:.7rem; width:100%; max-width:38rem }
+  .paso { background:var(--carta); border:1px solid var(--linea); border-radius:12px;
+    padding:.9rem 1rem; display:flex; flex-direction:column; gap:.25rem }
+  .paso .n { font-family:"Bebas Neue",Impact,sans-serif; font-size:1.5rem;
+    color:var(--verde); line-height:1 }
+  .paso .t { font-weight:600; font-size:.95rem }
+  .paso .d { color:var(--tinta2); font-size:.86rem; line-height:1.45 }
+
+  .cierre { text-align:center; max-width:32ch; color:var(--tinta2); font-size:1rem;
+    line-height:1.55 }
+  .cierre b { color:var(--tinta) }
+
+  .aviso { font-size:.74rem; color:var(--tinta3); text-align:center; max-width:40ch }
+
+  @media (prefers-reduced-motion:reduce) {
+    *,*::before,*::after { animation:none !important; }
+    .globo { opacity:1 !important; transform:none !important }
+  }
+</style>
+
+
+</head>
+<body>
+<div class="hoja">
+
+
+  <h1>De la foto a la factura</h1>
+  <p class="lema">Usted hace una foto. Lo demás ya está hecho.</p>
+
+  <div class="movil">
+    <div class="barra">
+      <div class="avatar">📄</div>
+      <div>
+        <div class="quien">Papeleo</div>
+        <div class="cuando">en línea</div>
+      </div>
+    </div>
+
+    <div class="chat">
+
+      <!-- 1. la foto del parte -->
+      <div class="globo mio p1">
+        <div class="foto">
+          <div class="papel-parte">
+            <div class="cab"></div>
+            <div class="l media"></div><div class="l"></div>
+            <div class="l corta"></div><div class="l media"></div>
+            <div class="l"></div><div class="l corta"></div>
+          </div>
+        </div>
+        <div class="hora">9:14 ✓✓</div>
+      </div>
+
+      <!-- 2. confirmación -->
+      <div class="globo suyo p2">
+        Recibido. Son 21 jornadas de agosto.
+        <div class="hora">9:14</div>
+      </div>
+
+      <!-- 3. trabajando -->
+      <div class="globo suyo p3">
+        <div class="puntos"><i></i><i></i><i></i></div>
+      </div>
+
+      <!-- 4. la factura -->
+      <div class="globo suyo p4">
+        <div class="pdf">
+          <div class="fila">
+            <div class="icono">PDF</div>
+            <div>
+              <div class="nombre">Factura 2026/08/001</div>
+              <div class="peso">Transportes Ruiz · 148 KB</div>
+            </div>
+          </div>
+          <div class="total">
+            <span class="q">Total con IVA</span>
+            <span class="c">5.256,00 €</span>
+          </div>
+        </div>
+        <div class="hora">9:14</div>
+      </div>
+
+      <!-- 5. enviada al cliente -->
+      <div class="globo suyo p5">
+        <div class="sello"><span class="tic">✓</span> Enviada a su cliente</div>
+        <div class="hora">9:15</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="pasos">
+    <div class="paso">
+      <span class="n">1</span>
+      <span class="t">Haga la foto</span>
+      <span class="d">Al parte de siempre, con el móvil. Como manda una foto a un hijo.</span>
+    </div>
+    <div class="paso">
+      <span class="n">2</span>
+      <span class="t">Mándela</span>
+      <span class="d">Por WhatsApp, al número de siempre. No hay que instalar nada.</span>
+    </div>
+    <div class="paso">
+      <span class="n">3</span>
+      <span class="t">Ya está</span>
+      <span class="d">La factura sale sola, con sus números, y se manda a su cliente.</span>
+    </div>
+  </div>
+
+  <p class="cierre">Sin programas que aprender, sin contraseñas nuevas,
+    sin cambiar de teléfono. <b>Un minuto al mes.</b></p>
+
+  <p class="aviso">Ejemplo con datos inventados. Los importes y el cliente
+    no corresponden a ninguna persona real.</p>
+</div>
+
+<p style="text-align:center"><a href="./index.html"
+   style="color:var(--verde);font-weight:600">← Volver</a></p>
+</body>
+</html>
